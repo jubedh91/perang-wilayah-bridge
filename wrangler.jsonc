@@ -1,0 +1,20 @@
+{
+  "$schema": "https://schema.cloudflare.com/d1/wrangler.json",
+  "name": "perang-wilayah-bridge",
+  "main": "src/index.js",
+  "compatibility_date": "2026-10-28",
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "GAME_ROOM",
+        "class_name": "GameRoom"
+      }
+    ]
+  },
+  "exports": {
+    "GameRoom": {
+      "type": "durable-object",
+      "storage": "sqlite"
+    }
+  }
+}
