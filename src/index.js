@@ -15,7 +15,8 @@ export class GameRoom extends DurableObject {
   async fetch(request) {
     const url = new URL(request.url);
 
-    if (request.headers.get("Upgrade") === "websocket") {
+    // WebSocket connection
+    if (request.headers.get("Upgrade")?.toLowerCase() === "websocket") {
       const pair = new WebSocketPair();
       const client = pair[0];
       const server = pair[1];
@@ -23,13 +24,12 @@ export class GameRoom extends DurableObject {
       server.accept();
       this.clients.add(server);
 
-      server.addEventListener("close", () => {
+      const removeClient = () => {
         this.clients.delete(server);
-      });
+      };
 
-      server.addEventListener("error", () => {
-        this.clients.delete(server);
-      });
+      server.addEventListener("close", removeClient);
+      server.addEventListener("error", removeClient);
 
       return new Response(null, {
         status: 101,
@@ -37,13 +37,17 @@ export class GameRoom extends DurableObject {
       });
     }
 
+    // Broadcast an event to connected game clients
     if (request.method === "POST" && url.pathname === "/event") {
       let data;
 
       try {
         data = await request.json();
       } catch {
-        data = Object.fromEntries(url.searchParams.entries());
+        return Response.json(
+          { success: false, error: "JSON tidak valid" },
+          { status: 400, headers: corsHeaders }
+        );
       }
 
       const message = JSON.stringify({
@@ -62,22 +66,26 @@ export class GameRoom extends DurableObject {
         }
       }
 
-      return Response.json({
-        success: true,
-        message: "Event diproses",
-        connectedClients: this.clients.size,
-        sent
-      }, {
-        headers: corsHeaders
-      });
+      return Response.json(
+        {
+          success: true,
+          message: "Event diproses",
+          connectedClients: this.clients.size,
+          sent
+        },
+        { headers: corsHeaders }
+      );
     }
 
-    return Response.json({
-      success: true,
-      connectedClients: this.clients.size
-    }, {
-      headers: corsHeaders
-    });
+    // Connection status
+    return Response.json(
+      {
+        success: true,
+        status: "GameRoom aktif",
+        connectedClients: this.clients.size
+      },
+      { headers: corsHeaders }
+    );
   }
 }
 
@@ -94,35 +102,56 @@ export default {
 
     const room = env.GAME_ROOM.getByName("perang-wilayah");
 
+    // Worker status
     if (url.pathname === "/") {
       return Response.json({
         status: "Perang Wilayah Bridge aktif",
         endpoint: "/event",
-        websocket: "/ws"
-      }, {
-        headers: corsHeaders
+        websocket: "/ws",
+        test: "/test"
       });
     }
 
+    // WebSocket endpoint for the game
+    if (url.pathname === "/ws") {
+      return room.fetch(request);
+    }
+
+    // Receive events from TikFinity
     if (url.pathname === "/event" && request.method === "POST") {
       return room.fetch(
         new Request("https://room.internal/event", {
           method: "POST",
-          headers: request.headers,
+          headers: {
+            "Content-Type": "application/json"
+          },
           body: await request.text()
         })
       );
     }
 
-    if (url.pathname === "/ws") {
+    // Send a test gift event
+    if (url.pathname === "/test" && request.method === "GET") {
       return room.fetch(
-        new Request("https://room.internal/ws", request)
+        new Request("https://room.internal/event", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            eventType: "gift",
+            giftName: "Rose",
+            username: "UJI WORKER",
+            userId: "test-user",
+            repeatCount: 1
+          })
+        })
       );
     }
 
-    return new Response("Not found", {
-      status: 404,
-      headers: corsHeaders
-    });
+    return Response.json(
+      { success: false, error: "Endpoint tidak ditemukan" },
+      { status: 404, headers: corsHeaders }
+    );
   }
 };
