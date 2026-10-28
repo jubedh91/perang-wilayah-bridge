@@ -1,5 +1,5 @@
 {
-  "$schema": "https://schema.cloudflare.com/d1/wrangler.json",
+  "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "perang-wilayah-bridge",
   "main": "src/index.js",
   "compatibility_date": "2026-10-28",
